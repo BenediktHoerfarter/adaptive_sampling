@@ -90,11 +90,12 @@ class Sphere():
             elif self.confinement_method == "smooth":
                 self.radius = self.r_min + (self.r_max - self.r_min) * (1e0 + np.cos(t/(self.t_expand + self.t_contract)*2*np.pi))
 
+            geometric_center = np.copy(md_state.coords).reshape((md_state.natoms, 3)).sum(axis=0) / float(md_state.natoms)
             # get atom wise confinement forces
             for i in range(int(md_state.natoms)):
-                xx = md_state.coords[3*i+0]
-                yy = md_state.coords[3*i+1]
-                zz = md_state.coords[3*i+2]
+                xx = md_state.coords[3*i+0] - geometric_center[0]
+                yy = md_state.coords[3*i+1] - geometric_center[1]
+                zz = md_state.coords[3*i+2] - geometric_center[2]
                 r  = np.sqrt(xx*xx+yy*yy+zz*zz)
                 mass = md_state.mass[i]
 
