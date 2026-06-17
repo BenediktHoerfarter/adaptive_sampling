@@ -80,7 +80,19 @@ class aMD(EnhancedSampling):
         self.amd_m2 = np.zeros_like(self.histogram)
         self.amd_corr = np.zeros_like(self.histogram)
 
-    def step_bias(self, write_output: bool = True, write_traj: bool = True, **kwargs):
+    def step_bias(self, write_output: bool = True, write_traj: bool = True, force_init: bool = False, force_equil: bool = False, **kwargs):
+        """Initializes, equilibrates and applies the (G/S)aMD bias and returns the boost force.
+        
+        Args:
+            write_output (bool): If True, the amd.out file is writen containing the energy histogram (Compact format).
+            write_traj (bool): If True, logs the amd boost energy and CV position every self.out_freq steps. Needed for full post-processing.
+            force_init (bool): If True, enforces initialization even after self.init_steps have been reached.
+            force_equil (bool): If True, enforces equilibration even after self.equil_steps have been reached. 
+            **kwargs (any): Optional, passed to self.get_cv(**kwargs)
+        
+        Returns:
+            bias_force (np.array, shape as self.md_state.forces): Calculated bias force to be added to the original forces.
+        """
 
         md_state = self.the_md.get_sampling_data()
         (xi, delta_xi) = self.get_cv(**kwargs)
@@ -90,8 +102,12 @@ class aMD(EnhancedSampling):
         self.amd_forces = np.copy(md_state.forces)
         epot = md_state.epot
 
-        if md_state.step < self.init_steps:
+        if md_state.step < self.init_steps or force_init:
             self._update_pot_distribution(epot)
+            if force_init:
+                # Make sure that E and k values are available immediately after force_init ends
+                # TODO / FIXME: Handle divide-by-zero warnings
+                self._calc_E_k0()
 
         else:
             if md_state.step == self.init_steps:
@@ -100,7 +116,7 @@ class aMD(EnhancedSampling):
             # apply boost potential
             bias_force += self._apply_boost(epot)
 
-            if md_state.step < self.equil_steps:
+            if md_state.step < self.equil_steps or force_equil:
                 self._update_pot_distribution(epot)
                 self._calc_E_k0()
 
@@ -184,6 +200,15 @@ class aMD(EnhancedSampling):
             self.pot_count, self.pot_avg, self.pot_m2, epot
         )
         self.pot_std = np.sqrt(self.pot_var)
+
+    def reset_pot_distribution(self):
+        self.pot_count = 0
+        self.pot_var = 0.0
+        self.pot_std = 0.0
+        self.pot_m2 = 0.0
+        self.pot_avg = 0.0
+        self.pot_min = +np.inf
+        self.pot_max = -np.inf
 
     def _calc_E_k0(self):
         """compute force constant for amd boost potential
