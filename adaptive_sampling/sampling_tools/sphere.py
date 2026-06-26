@@ -13,6 +13,7 @@ class Sphere():
         t_shift (float): Time shift to start the confinement in fs.
         confinement_method (str): Method for confinement ('smooth-step', 'smooth', 'step', 'constant').
         diffusion_assisted (bool): Whether to use diffusion assisted expansion.
+        use_geometric_center (bool): Whether to use geometric center as reference point for spherical confinement.
     """ 
     def __init__(
         self, 
@@ -24,6 +25,7 @@ class Sphere():
         t_shift: float = 0.0,
         confinement_method: str = 'smooth-step',
         diffusion_assisted: bool = True,
+        use_geometric_center: bool = True,
     ):
         if the_md is None:
             raise ValueError(" >>> ERROR: Molecular dynamics object has to be provided for spherical confinment.")
@@ -56,6 +58,7 @@ class Sphere():
             self.t_period = None
 
         self.diffusion_assisted = diffusion_assisted
+        self.use_geometric_center = use_geometric_center
         self.bias_pot = 0.0
         self.radius = self.r_max
 
@@ -90,11 +93,17 @@ class Sphere():
             elif self.confinement_method == "smooth":
                 self.radius = self.r_min + (self.r_max - self.r_min) * (1e0 + np.cos(t/(self.t_expand + self.t_contract)*2*np.pi))
 
+            if self.use_geometric_center:
+                geometric_center = np.copy(md_state.coords).reshape((md_state.natoms, 3)).sum(axis=0) / float(md_state.natoms)
             # get atom wise confinement forces
             for i in range(int(md_state.natoms)):
                 xx = md_state.coords[3*i+0]
                 yy = md_state.coords[3*i+1]
                 zz = md_state.coords[3*i+2]
+                if self.use_geometric_center:
+                    xx -= geometric_center[0]
+                    yy -= geometric_center[1]
+                    zz -= geometric_center[2]
                 r  = np.sqrt(xx*xx+yy*yy+zz*zz)
                 mass = md_state.mass[i]
 
